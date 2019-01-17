@@ -3,18 +3,16 @@
 # Image Setup
 #--------------------------------------------------------------------------
 #
-# To edit the 'php-fpm' base Image, visit its repository on Github
-#    https://github.com/Laradock/php-fpm
+# To edit the 'php-fpm' base Image, visit its repository on Docker
+# https://hub.docker.com/_/php
 #
-# To change its version, see the available Tags on the Docker Hub:
-#    https://hub.docker.com/r/laradock/php-fpm/tags/
-#
-# Note: Base Image name format {image-tag}-{php-version}
+# Note: Base Image updated from Docker Official Images
+# The full description can be found at https://github.com/docker-library/docs/tree/master/php/README.md
 #
 
 ARG LARADOCK_PHP_VERSION
 
-FROM laradock/php-fpm:2.2-${LARADOCK_PHP_VERSION}
+FROM php:${LARADOCK_PHP_VERSION}-fpm
 
 LABEL maintainer="Mahmoud Zalt <mahmoud@zalt.me>"
 
@@ -23,32 +21,53 @@ ARG LARADOCK_PHP_VERSION
 # Set Environment Variables
 ENV DEBIAN_FRONTEND noninteractive
 
+#
+#--------------------------------------------------------------------------
+# Software's Installation
+#--------------------------------------------------------------------------
+#
+# Installing tools and PHP extentions using "apt", "docker-php", "pecl",
+#
+
+# Install "curl", "libmemcached-dev", "libpq-dev", "libjpeg-dev",
+# "libpng12-dev", "libfreetype6-dev", "libssl-dev", "libmcrypt-dev",
+
+RUN apt-get update -y && \
+apt-get upgrade -y && \
+apt-get install -y --no-install-recommends \
+curl \
+libmemcached-dev \
+libz-dev \
+libpq-dev \
+libjpeg-dev \
+libfreetype6-dev \
+libssl-dev \
+libmcrypt-dev
+
+# Install the PHP mcrypt extention
+# RUN docker-php-ext-install mcrypt
+
+# Install the PHP pdo_mysql extention
+RUN docker-php-ext-install pdo_mysql
+
+# Install the PHP pdo_pgsql extention
+RUN docker-php-ext-install pdo_pgsql
+
+#####################################
+# gd:
+#####################################
+
+# Install the PHP gd library
+RUN docker-php-ext-configure gd \
+--enable-gd-native-ttf \
+--with-jpeg-dir=/usr/lib \
+--with-freetype-dir=/usr/include/freetype2 && \
+docker-php-ext-install gd
+
 # always run apt update when start and after add new source list, then clean up at end.
 RUN apt-get update -yqq && \
     apt-get install -y apt-utils && \
     pecl channel-update pecl.php.net
-
-#
-#--------------------------------------------------------------------------
-# Mandatory Software's Installation
-#--------------------------------------------------------------------------
-#
-# Mandatory Software's such as ("mcrypt", "pdo_mysql", "libssl-dev", ....)
-# are installed on the base image 'laradock/php-fpm' image. If you want
-# to add more Software's or remove existing one, you need to edit the
-# base image (https://github.com/Laradock/php-fpm).
-#
-
-#
-#--------------------------------------------------------------------------
-# Optional Software's Installation
-#--------------------------------------------------------------------------
-#
-# Optional Software's will only be installed if you set them to `true`
-# in the `docker-compose.yml` before the build.
-# Example:
-#   - INSTALL_ZIP_ARCHIVE=true
-#
 
 ###########################################################################
 # SSH2:
@@ -224,9 +243,7 @@ RUN if [ ${INSTALL_AMQP} = true ]; then \
     apt-get install librabbitmq-dev -y && \
     # Install the amqp extension
     pecl install amqp && \
-    docker-php-ext-enable amqp && \
-    # Install the sockets extension
-    docker-php-ext-install sockets \
+    docker-php-ext-enable amqp \
 ;fi
 
 ###########################################################################
@@ -530,28 +547,15 @@ ARG INSTALL_PHALCON=false
 ARG LARADOCK_PHALCON_VERSION
 ENV LARADOCK_PHALCON_VERSION ${LARADOCK_PHALCON_VERSION}
 
-# Copy phalcon configration
-COPY ./phalcon.ini /usr/local/etc/php/conf.d/phalcon.ini.disable
-
 RUN if [ $INSTALL_PHALCON = true ]; then \
     apt-get update && apt-get install -y unzip libpcre3-dev gcc make re2c \
     && curl -L -o /tmp/cphalcon.zip https://github.com/phalcon/cphalcon/archive/v${LARADOCK_PHALCON_VERSION}.zip \
     && unzip -d /tmp/ /tmp/cphalcon.zip \
     && cd /tmp/cphalcon-${LARADOCK_PHALCON_VERSION}/build \
     && ./install \
-    && mv /usr/local/etc/php/conf.d/phalcon.ini.disable /usr/local/etc/php/conf.d/phalcon.ini \
+    && echo "extension=phalcon.so" >> /etc/php/${LARADOCK_PHP_VERSION}/mods-available/phalcon.ini \
+    && ln -s /etc/php/${LARADOCK_PHP_VERSION}/mods-available/phalcon.ini /etc/php/${LARADOCK_PHP_VERSION}/cli/conf.d/30-phalcon.ini \
     && rm -rf /tmp/cphalcon* \
-;fi
-
-###########################################################################
-# APCU:
-###########################################################################
-
-ARG INSTALL_APCU=false
-
-RUN if [ ${INSTALL_APCU} = true ]; then \
-    pecl install apcu && \
-    docker-php-ext-enable apcu \
 ;fi
 
 ###########################################################################
